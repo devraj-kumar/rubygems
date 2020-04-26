@@ -1,6 +1,6 @@
 # Development setup
 
-Bundler doesn't use a Gemfile to list development dependencies, because when we tried it we couldn't tell if we were awake or it was just another level of dreams. To work on Bundler, you'll probably want to do a couple of things:
+To work on Bundler, you'll probably want to do a couple of things:
 
 1. [Fork the Rubygems repo](https://github.com/rubygems/rubygems), and clone the fork onto your machine. ([Follow this tutorial](https://help.github.com/articles/fork-a-repo/) for instructions on forking a repo.)
 
@@ -26,7 +26,7 @@ Bundler doesn't use a Gemfile to list development dependencies, because when we 
 
 6. Optionally, you can run the test suite in parallel:
 
-        $ bin/parallel_rspec spec
+        $ bin/parallel_rspec
 
 7. Set up a shell alias to run Bundler from your clone, e.g. a Bash alias ([follow these instructions](https://www.moncefbelyamani.com/create-aliases-in-bash-profile-to-assign-shortcuts-for-common-terminal-commands/) for adding aliases to your `~/.bashrc` profile):
 

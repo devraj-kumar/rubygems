@@ -30,6 +30,8 @@ require 'bundler'
 
 require 'minitest/autorun'
 
+ENV["JARS_SKIP"] = "true" if Gem.java_platform? # avoid unnecessary and noisy `jar-dependencies` post install hook
+
 require 'rubygems/deprecate'
 
 require 'fileutils'
@@ -109,6 +111,8 @@ class Gem::TestCase < Minitest::Test
   attr_accessor :uri # :nodoc:
 
   TEST_PATH = ENV.fetch('RUBYGEMS_TEST_PATH', File.expand_path('../../../test/rubygems', __FILE__))
+
+  SPECIFICATIONS = File.expand_path(File.join(TEST_PATH, "specifications"), __FILE__)
 
   def assert_activate(expected, *specs)
     specs.each do |spec|
@@ -298,6 +302,7 @@ class Gem::TestCase < Minitest::Test
     ENV['GEM_VENDOR'] = nil
     ENV['GEMRC'] = nil
     ENV['SOURCE_DATE_EPOCH'] = nil
+    ENV["TMPDIR"] = File.expand_path("tmp")
 
     @current_dir = Dir.pwd
     @fetcher     = nil
@@ -315,17 +320,6 @@ class Gem::TestCase < Minitest::Test
     @tempdir.tap(&Gem::UNTAINT)
 
     FileUtils.mkdir_p @tempdir
-
-    # This makes the tempdir consistent on Windows.
-    # Dir.tmpdir may return short path name, but Dir[Dir.tmpdir] returns long
-    # path name. https://bugs.ruby-lang.org/issues/10819
-    # File.expand_path or File.realpath doesn't convert path name to long path
-    # name. Only Dir[] (= Dir.glob) works.
-    # Short and long path name is specific to Windows filesystem.
-    if win_platform?
-      @tempdir = Dir[@tempdir][0]
-      @tempdir.tap(&Gem::UNTAINT)
-    end
 
     @orig_SYSTEM_WIDE_CONFIG_FILE = Gem::ConfigFile::SYSTEM_WIDE_CONFIG_FILE
     Gem::ConfigFile.send :remove_const, :SYSTEM_WIDE_CONFIG_FILE
@@ -1209,7 +1203,7 @@ Also, a list:
 
   def build_rake_in(good=true)
     gem_ruby = Gem.ruby
-    Gem.ruby = @@ruby
+    Gem.ruby = self.class.rubybin
     env_rake = ENV["rake"]
     rake = (good ? @@good_rake : @@bad_rake)
     ENV["rake"] = rake
@@ -1249,6 +1243,10 @@ Also, a list:
     end
   end
 
+  def ruby_with_rubygems_in_load_path
+    [Gem.ruby, "-I", File.expand_path("..", __dir__)]
+  end
+
   def with_clean_path_to_ruby
     orig_ruby = Gem.ruby
 
@@ -1278,7 +1276,6 @@ Also, a list:
 
   end
 
-  @@ruby = rubybin
   @@good_rake = "#{rubybin} #{escape_path(TEST_PATH, 'good_rake.rb')}"
   @@bad_rake = "#{rubybin} #{escape_path(TEST_PATH, 'bad_rake.rb')}"
 

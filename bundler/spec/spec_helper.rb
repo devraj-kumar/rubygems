@@ -14,14 +14,15 @@ if File.expand_path(__FILE__) =~ %r{([^\w/\.:\-])}
 end
 
 require "bundler"
-require "rspec"
+require "rspec/core"
+require "rspec/expectations"
+require "rspec/mocks"
 
 require_relative "support/builders"
 require_relative "support/filters"
 require_relative "support/helpers"
 require_relative "support/indexes"
 require_relative "support/matchers"
-require_relative "support/parallel"
 require_relative "support/permissions"
 require_relative "support/platforms"
 require_relative "support/sometimes"
@@ -47,6 +48,8 @@ RSpec.configure do |config|
 
   # Enable flags like --only-failures and --next-failure
   config.example_status_persistence_file_path = ".rspec_status"
+
+  config.silence_filter_announcements = !ENV["TEST_ENV_NUMBER"].nil?
 
   config.disable_monkey_patching!
 
@@ -79,7 +82,7 @@ RSpec.configure do |config|
 
   config.before :suite do
     require_relative "support/rubygems_ext"
-    Spec::Rubygems.setup
+    Spec::Rubygems.test_setup
     ENV["RUBYOPT"] = "#{ENV["RUBYOPT"]} -r#{Spec::Path.spec_dir}/support/hax.rb"
     ENV["BUNDLE_SPEC_RUN"] = "true"
     ENV["BUNDLE_USER_CONFIG"] = ENV["BUNDLE_USER_CACHE"] = ENV["BUNDLE_USER_PLUGIN"] = nil

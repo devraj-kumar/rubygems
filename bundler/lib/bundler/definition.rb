@@ -77,6 +77,7 @@ module Bundler
       @locked_bundler_version = nil
       @locked_ruby_version    = nil
       @locked_specs_incomplete_for_platform = false
+      @new_platform = nil
 
       if lockfile && File.exist?(lockfile)
         @lockfile_contents = Bundler.read_file(lockfile)
@@ -455,9 +456,9 @@ module Bundler
       @locked_deps.each  {|name, d| both_sources[name][1] = d.source }
 
       both_sources.each do |name, (dep, lock_source)|
-        next unless (dep.nil? && !lock_source.nil?) || (!dep.nil? && !lock_source.nil? && !lock_source.can_lock?(dep))
+        next if lock_source.nil? || (dep && lock_source.can_lock?(dep))
         gemfile_source_name = (dep && dep.source) || "no specified source"
-        lockfile_source_name = lock_source || "no specified source"
+        lockfile_source_name = lock_source
         changed << "* #{name} from `#{gemfile_source_name}` to `#{lockfile_source_name}`"
       end
 

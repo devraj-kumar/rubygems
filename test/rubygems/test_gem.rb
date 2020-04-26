@@ -7,10 +7,6 @@ require 'pathname'
 require 'tmpdir'
 require 'rbconfig'
 
-if File.exist?(File.join(Dir.tmpdir, "Gemfile"))
-  raise "rubygems/bundler tests do not work correctly if there is #{ File.join(Dir.tmpdir, "Gemfile") }"
-end
-
 class TestGem < Gem::TestCase
 
   PLUGINS_LOADED = [] # rubocop:disable Style/MutableConstant
@@ -312,7 +308,7 @@ class TestGem < Gem::TestCase
     require "open3"
     output, status = Open3.capture2e(
       { "GEM_HOME" => Gem.paths.home, "DEBUG_RESOLVER" => "1" },
-      Gem.ruby, "-I", File.expand_path("../../lib", __dir__), "-e", "\"Gem.activate_bin_path('a', 'exec', '>= 0')\""
+      *ruby_with_rubygems_in_load_path, "-e", "\"Gem.activate_bin_path('a', 'exec', '>= 0')\""
     )
 
     assert status.success?, output
@@ -1636,8 +1632,7 @@ class TestGem < Gem::TestCase
     assert_equal expected_specs, Gem.use_gemdeps.sort_by { |s| s.name }
   end
 
-  LIB_PATH = File.expand_path "../../../lib".dup.tap(&Gem::UNTAINT), __FILE__.dup.tap(&Gem::UNTAINT)
-  BUNDLER_LIB_PATH = File.expand_path $LOAD_PATH.find {|lp| File.file?(File.join(lp, "bundler.rb")) }.dup.tap(&Gem::UNTAINT)
+  BUNDLER_LIB_PATH = File.expand_path $LOAD_PATH.find {|lp| File.file?(File.join(lp, "bundler.rb")) }
   BUNDLER_FULL_NAME = "bundler-#{Bundler::VERSION}".freeze
 
   def add_bundler_full_name(names)
@@ -1664,8 +1659,8 @@ class TestGem < Gem::TestCase
     ENV['RUBYGEMS_GEMDEPS'] = "-"
 
     path = File.join @tempdir, "gem.deps.rb"
-    cmd = [Gem.ruby.dup.tap(&Gem::UNTAINT), "-I#{LIB_PATH.tap(&Gem::UNTAINT)}",
-           "-I#{BUNDLER_LIB_PATH.tap(&Gem::UNTAINT)}", "-rrubygems"]
+    cmd = [*ruby_with_rubygems_in_load_path,
+           "-I#{BUNDLER_LIB_PATH}"]
     cmd << "-eputs Gem.loaded_specs.values.map(&:full_name).sort"
 
     File.open path, "w" do |f|
@@ -1702,8 +1697,8 @@ class TestGem < Gem::TestCase
     Dir.mkdir "sub1"
 
     path = File.join @tempdir, "gem.deps.rb"
-    cmd = [Gem.ruby.dup.tap(&Gem::UNTAINT), "-Csub1", "-I#{LIB_PATH.tap(&Gem::UNTAINT)}",
-           "-I#{BUNDLER_LIB_PATH.tap(&Gem::UNTAINT)}", "-rrubygems"]
+    cmd = [*ruby_with_rubygems_in_load_path, "-Csub1",
+           "-I#{BUNDLER_LIB_PATH}"]
     cmd << "-eputs Gem.loaded_specs.values.map(&:full_name).sort"
 
     File.open path, "w" do |f|
@@ -1748,6 +1743,18 @@ class TestGem < Gem::TestCase
     assert_equal new_style, Gem.find_unresolved_default_spec("bar.rb")
     assert_nil              Gem.find_unresolved_default_spec("exec")
     assert_nil              Gem.find_unresolved_default_spec("README")
+  end
+
+  def test_register_default_spec_old_style_with_folder_starting_with_lib
+    Gem.clear_default_specs
+
+    old_style = Gem::Specification.new do |spec|
+      spec.files = ["libexec/bundle", "foo.rb", "bar.rb"]
+    end
+
+    Gem.register_default_spec old_style
+
+    assert_equal old_style, Gem.find_unresolved_default_spec("foo.rb")
   end
 
   def test_use_gemdeps

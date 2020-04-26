@@ -944,7 +944,7 @@ dependencies: []
     assert_equal File.join(@tempdir, 'a-2.gemspec'), spec.loaded_from
   end
 
-  if RUBY_VERSION < '2.7'
+  if RUBY_ENGINE == 'ruby' and RUBY_VERSION < '2.7'
     def test_self_load_tainted
       full_path = @a2.spec_file
       write_file full_path do |io|
@@ -1135,48 +1135,6 @@ dependencies: []
 
     refute_includes Gem::Specification.all_names, 'a-1'
     refute_includes Gem::Specification.stubs.map { |s| s.full_name }, 'a-1'
-  end
-
-  def test_self_stubs
-    Gem.loaded_specs.clear
-    Gem::Specification.class_variable_set(:@@stubs, nil)
-
-    dir_standard_specs = File.join Gem.dir, 'specifications'
-    dir_default_specs = Gem.default_specifications_dir
-
-    # Create gemspecs in three locations used in stubs
-    loaded_spec = Gem::Specification.new 'a', '3'
-    Gem.loaded_specs['a'] = loaded_spec
-    save_gemspec 'a', '2', dir_default_specs
-    save_gemspec 'a', '1', dir_standard_specs
-
-    full_names = ['a-3', 'a-2', 'a-1']
-    assert_equal full_names, Gem::Specification.stubs.map { |s| s.full_name }
-
-    Gem.loaded_specs.delete 'a'
-    Gem::Specification.class_variable_set(:@@stubs, nil)
-  end
-
-  def test_self_stubs_for
-    Gem.loaded_specs.clear
-    Gem::Specification.class_variable_set(:@@stubs, nil)
-
-    dir_standard_specs = File.join Gem.dir, 'specifications'
-    dir_default_specs = Gem.default_specifications_dir
-
-    # Create gemspecs in three locations used in stubs
-    loaded_spec = Gem::Specification.new 'a', '3'
-    Gem.loaded_specs['a'] = loaded_spec
-    save_gemspec('a-2', '2', dir_default_specs) { |s| s.name = 'a' }
-    save_gemspec('a-1', '1', dir_standard_specs) { |s| s.name = 'a' }
-
-    full_names = ['a-3', 'a-2', 'a-1']
-
-    assert_equal full_names, Gem::Specification.stubs_for('a').map { |s| s.full_name }
-    assert_equal 1, Gem::Specification.class_variable_get(:@@stubs_by_name).length
-
-    Gem.loaded_specs.delete 'a'
-    Gem::Specification.class_variable_set(:@@stubs, nil)
   end
 
   def test_self_stubs_for_lazy_loading
@@ -3146,10 +3104,25 @@ Please report a bug if this causes problems.
       @a1.validate
     end
 
-    assert_match <<-warning, @ui.error
+    assert_match <<-WARNING, @ui.error
 WARNING:  licenses is empty, but is recommended.  Use a license identifier from
 http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
-    warning
+    WARNING
+  end
+
+  def test_removed_methods
+    assert_equal Gem::Specification::REMOVED_METHODS, [:rubyforge_project=]
+  end
+
+  def test_validate_removed_rubyforge_project
+    util_setup_validate
+
+    use_ui @ui do
+      @a1.rubyforge_project = 'invalid-attribute'
+      @a1.validate
+    end
+
+    assert_match "rubyforge_project= is deprecated", @ui.error
   end
 
   def test_validate_license_values
@@ -3160,10 +3133,10 @@ http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
       @a1.validate
     end
 
-    assert_match <<-warning, @ui.error
+    assert_match <<-WARNING, @ui.error
 WARNING:  license value 'BSD' is invalid.  Use a license identifier from
 http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
-    warning
+    WARNING
   end
 
   def test_validate_license_values_plus
@@ -3207,14 +3180,14 @@ http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
       @a1.validate
     end
 
-    assert_match <<-warning, @ui.error
+    assert_match <<-WARNING, @ui.error
 WARNING:  license value 'GPL-2.0+ FOO' is invalid.  Use a license identifier from
 http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
-    warning
-    assert_match <<-warning, @ui.error
+    WARNING
+    assert_match <<-WARNING, @ui.error
 WARNING:  license value 'GPL-2.0 FOO' is invalid.  Use a license identifier from
 http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
-    warning
+    WARNING
   end
 
   def test_validate_license_with_invalid_exception
@@ -3225,10 +3198,10 @@ http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
       @a1.validate
     end
 
-    assert_match <<-warning, @ui.error
+    assert_match <<-WARNING, @ui.error
 WARNING:  license value 'GPL-2.0+ WITH Autocofn-exception-2.0' is invalid.  Use a license identifier from
 http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
-    warning
+    WARNING
   end
 
   def test_validate_license_gives_suggestions
@@ -3239,11 +3212,11 @@ http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
       @a1.validate
     end
 
-    assert_match <<-warning, @ui.error
+    assert_match <<-WARNING, @ui.error
 WARNING:  license value 'ruby' is invalid.  Use a license identifier from
 http://spdx.org/licenses or 'Nonstandard' for a nonstandard license.
 Did you mean 'Ruby'?
-    warning
+    WARNING
   end
 
   def test_validate_empty_files
@@ -3847,12 +3820,17 @@ end
       FileUtils.mkdir_p "test"
       FileUtils.mkdir_p "bin"
 
-      FileUtils.touch File.join("ext", "a", "extconf.rb")
-      FileUtils.touch File.join("lib", "code.rb")
-      FileUtils.touch File.join("test", "suite.rb")
+      begin
+        umask_orig = File.umask(2)
+        FileUtils.touch File.join("ext", "a", "extconf.rb")
+        FileUtils.touch File.join("lib", "code.rb")
+        FileUtils.touch File.join("test", "suite.rb")
 
-      File.open "bin/exec", "w", 0755 do |fp|
-        fp.puts "#!#{Gem.ruby}"
+        File.open "bin/exec", "w", 0755 do |fp|
+          fp.puts "#!#{Gem.ruby}"
+        end
+      ensure
+        File.umask(umask_orig)
       end
     end
   end

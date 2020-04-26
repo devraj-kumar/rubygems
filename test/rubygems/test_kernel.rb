@@ -91,6 +91,23 @@ class TestKernel < Gem::TestCase
     refute $:.any? { |p| %r{a-1/bin} =~ p }
   end
 
+  def test_gem_failing_inside_require_doesnt_cause_double_exceptions
+    File.write("activate.rb", "gem('a', '= 999')\n")
+
+    require "open3"
+
+    output, _ = Open3.capture2e(
+      { "GEM_HOME" => Gem.paths.home },
+      *ruby_with_rubygems_in_load_path,
+      "-r",
+      "./activate.rb"
+    )
+
+    load_errors = output.split("\n").select { |line| line.include?("Could not find")}
+
+    assert_equal 1, load_errors.size
+  end
+
   def test_gem_bundler
     quick_gem 'bundler', '1'
     quick_gem 'bundler', '2.a'

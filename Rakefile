@@ -7,9 +7,9 @@ require 'psych'
 
 desc "Setup Rubygems dev environment"
 task :setup do
-  version = File.read("Gemfile.lock").split(/BUNDLED WITH\n   /).last
+  version = File.read("dev_gems.rb.lock").split(/BUNDLED WITH\n   /).last
   sh "gem install bundler:#{version}"
-  sh "bundle install"
+  sh "bundle install --gemfile=dev_gems.rb"
 end
 
 desc "Setup git hooks"
@@ -39,9 +39,9 @@ RDoc::Task.new :rdoc => 'docs', :clobber_rdoc => 'clobber_docs' do |doc|
   doc.title  = "RubyGems #{v} API Documentation"
 
   rdoc_files = Rake::FileList.new %w[lib bundler/lib]
-  rdoc_files.add %w[History.txt LICENSE.txt MIT.txt CODE_OF_CONDUCT.md CONTRIBUTING.rdoc
-                    MAINTAINERS.txt Manifest.txt POLICIES.rdoc README.md UPGRADING.rdoc bundler/CHANGELOG.md
-                    bundler/CONTRIBUTING.md bundler/LICENSE.md bundler/README.md
+  rdoc_files.add %w[History.txt LICENSE.txt MIT.txt CODE_OF_CONDUCT.md CONTRIBUTING.md
+                    MAINTAINERS.txt Manifest.txt POLICIES.md README.md UPGRADING.md bundler/CHANGELOG.md
+                    bundler/doc/contributing/README.md bundler/LICENSE.md bundler/README.md
                     hide_lib_for_update/note.txt].map(&:freeze)
 
   doc.rdoc_files = rdoc_files
@@ -386,13 +386,13 @@ module Rubygems
 
     def self.all
       files = []
-      exclude = %r{\.git|\./bundler/(?!lib|man|exe|[^/]+\.md|bundler.gemspec)}ox
-      tracked_files = `git ls-files`.split("\n").map {|f| "./#{f}" }
+      exclude = %r{\A(?:\.|dev_gems|bundler/(?!lib|man|exe|[^/]+\.md|bundler.gemspec))}
+      tracked_files = `git ls-files`.split("\n")
 
       tracked_files.each do |path|
         next unless File.file?(path)
         next if path =~ exclude
-        files << path[2..-1]
+        files << path
       end
 
       files

@@ -16,12 +16,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
-      - name: Test bundler
-        run: |
-          bin/rake spec:parallel_deps
-          RGV=.. bin/parallel_rspec spec
-        working-directory: ./bundler
-        continue-on-error: true
+          bundler: none
       - name: Test rubygems
         run: |
           rake setup

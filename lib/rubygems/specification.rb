@@ -193,6 +193,12 @@ class Gem::Specification < Gem::BasicSpecification
   @@spec_with_requirable_file = {}
   @@active_stub_with_requirable_file = {}
 
+  # Tracking removed method calls to warn users during build time.
+  REMOVED_METHODS = [:rubyforge_project=].freeze # :nodoc:
+  def removed_method_calls
+    @removed_method_calls ||= []
+  end
+
   ######################################################################
   # :section: Required gemspec attributes
 
@@ -720,20 +726,12 @@ class Gem::Specification < Gem::BasicSpecification
   # Deprecated: You must now specify the executable name to  Gem.bin_path.
 
   attr_writer :default_executable
-  deprecate :default_executable=
+  rubygems_deprecate :default_executable=
 
   ##
   # Allows deinstallation of gems with legacy platforms.
 
   attr_writer :original_platform # :nodoc:
-
-  ##
-  # Deprecated and ignored.
-  #
-  # Formerly used to set rubyforge project.
-
-  attr_writer :rubyforge_project
-  deprecate :rubyforge_project=
 
   ##
   # The Gem::Specification version of this gemspec.
@@ -803,7 +801,7 @@ class Gem::Specification < Gem::BasicSpecification
   def self.stubs
     @@stubs ||= begin
       pattern = "*.gemspec"
-      stubs = Gem.loaded_specs.values + installed_stubs(dirs, pattern) + default_stubs(pattern)
+      stubs = installed_stubs(dirs, pattern) + default_stubs(pattern)
       stubs = stubs.uniq { |stub| stub.full_name }
 
       _resort!(stubs)
@@ -834,9 +832,7 @@ class Gem::Specification < Gem::BasicSpecification
       @@stubs_by_name[name]
     else
       pattern = "#{name}-*.gemspec"
-      stubs = Gem.loaded_specs.values +
-        installed_stubs(dirs, pattern).select { |s| Gem::Platform.match s.platform } +
-        default_stubs(pattern)
+      stubs = installed_stubs(dirs, pattern).select { |s| Gem::Platform.match s.platform } + default_stubs(pattern)
       stubs = stubs.uniq { |stub| stub.full_name }.group_by(&:name)
       stubs.each_value { |v| _resort!(v) }
 
@@ -1725,7 +1721,7 @@ class Gem::Specification < Gem::BasicSpecification
     end
     result
   end
-  deprecate :default_executable
+  rubygems_deprecate :default_executable
 
   ##
   # The default value for specification attribute +name+
@@ -1928,7 +1924,7 @@ class Gem::Specification < Gem::BasicSpecification
   def has_rdoc # :nodoc:
     true
   end
-  deprecate :has_rdoc
+  rubygems_deprecate :has_rdoc
 
   ##
   # Deprecated and ignored.
@@ -1938,10 +1934,10 @@ class Gem::Specification < Gem::BasicSpecification
   def has_rdoc=(ignored) # :nodoc:
     @has_rdoc = true
   end
-  deprecate :has_rdoc=
+  rubygems_deprecate :has_rdoc=
 
   alias :has_rdoc? :has_rdoc # :nodoc:
-  deprecate :has_rdoc?
+  rubygems_deprecate :has_rdoc?
 
   ##
   # True if this gem has files in test_files
@@ -1963,7 +1959,7 @@ class Gem::Specification < Gem::BasicSpecification
     yaml_initialize coder.tag, coder.map
   end
 
-  eval <<-RB, binding, __FILE__, __LINE__ + 1
+  eval <<-RUBY, binding, __FILE__, __LINE__ + 1
     def set_nil_attributes_to_nil
       #{@@nil_attributes.map {|key| "@#{key} = nil" }.join "; "}
     end
@@ -1973,7 +1969,7 @@ class Gem::Specification < Gem::BasicSpecification
       #{@@non_nil_attributes.map {|key| "@#{key} = #{INITIALIZE_CODE_FOR_DEFAULTS[key]}" }.join ";"}
     end
     private :set_not_nil_attributes_to_default_values
-  RB
+  RUBY
 
   ##
   # Specification constructor. Assigns the default values to the attributes
@@ -2100,9 +2096,15 @@ class Gem::Specification < Gem::BasicSpecification
   end
 
   ##
+  # Track removed method calls to warn about during build time.
   # Warn about unknown attributes while loading a spec.
 
   def method_missing(sym, *a, &b) # :nodoc:
+    if REMOVED_METHODS.include?(sym)
+      removed_method_calls << sym
+      return
+    end
+
     if @specification_version > CURRENT_SPECIFICATION_VERSION and
       sym.to_s =~ /=$/
       warn "ignoring #{sym} loading #{full_name}" if $DEBUG

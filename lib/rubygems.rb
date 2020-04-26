@@ -401,11 +401,11 @@ module Gem
           target[k] = v
         when Array
           unless Gem::Deprecate.skip
-            warn <<-eowarn
+            warn <<-EOWARN
 Array values in the parameter to `Gem.paths=` are deprecated.
 Please use a String or nil.
 An Array (#{env.inspect}) was passed in from #{caller[3]}
-            eowarn
+            EOWARN
           end
           target[k] = v.join File::PATH_SEPARATOR
         end
@@ -1257,10 +1257,11 @@ An Array (#{env.inspect}) was passed in from #{caller[3]}
     #
 
     def register_default_spec(spec)
-      new_format = spec.require_paths.any? {|path| spec.files.any? {|f| f.start_with? path } }
+      extended_require_paths = spec.require_paths.map {|f| f + "/"}
+      new_format = extended_require_paths.any? {|path| spec.files.any? {|f| f.start_with? path } }
 
       if new_format
-        prefix_group = spec.require_paths.map {|f| f + "/"}.join("|")
+        prefix_group = extended_require_paths.join("|")
         prefix_pattern = /^(#{prefix_group})/
       end
 
